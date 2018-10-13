@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Google Places Widget</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link type="text/css" rel="stylesheet" href="materialize.min.css"  media="screen,projection"/>
+  <script type="text/javascript" charset="utf8" src="https://lpcdn.lpsnmedia.net/webagent/client-SDK.min.js"></script>
+  <script type="text/javascript" charset="utf8" src="https://connect-widgets.contactatonce.com/widgets/agentWidgetSDK.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <script
+    src="https://code.jquery.com/jquery-3.3.1.min.js"
+    integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+    crossorigin="anonymous">
+  </script>
+</head>
+<body>
+
+<div class="container">
+  <div class="row">
+    <form class="col s12" id="target">
+      <div class="row">
+        <div class="input-field col s12">
+          <input id="autocomplete-input" type="text" class="validate autocomplete" name="searchtext">
+          <label for="search_text">Search</label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col s12 center-align">
+          <button class="btn waves-effect waves-light" type="submit" name="action">Search
+            <i class="material-icons right">search</i>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+<div class="container">
+  <div class="row">
+    <div class="col s12">
+      <div class="card">
+        <div class="center-align card-image" id="map">
+        </div>
+        <div class="card-content" id="result">
+        </div>
+        <div class="card-action" id="sendInfo">
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+	  
+<script>
+document.addEventListener(
+    'DOMContentLoaded',
+    main
+)
+/*$(document).ready(function(){
+  $.getJSON("js/languageOptions.json", function(json) {
+    var languages = {};
+    $.each(json.languageOptions, function(index, value) {
+        languages[value] = null;
+    });
+    $('input.autocomplete').autocomplete({
+      data: languages,
+    });
+  });
+        
+});*/
+
+var corsRedirectURL = "http://cors.io/?";
+var mapEmbedKey = "xxx";
+var placeSearchKey = "xxx";
+
+function main() {
+  
+  lpTag.agentSDK.init();
+  cao.agentWidgetSDK.initialize();
+  
+  $("#target").submit(function (event) {   
+      
+    var searchText = $("input[name='searchtext']").val();
+  
+    console.log("search text is " + searchText);
+    
+    var placesSearchURL = corsRedirectURL + "https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=" + encodeURI(searchText) + "&inputtype=textquery&fields=place_id&key="+ placeSearchKey;
+    
+    console.log("searching with: " + placesSearchURL);
+    $.getJSON( placesSearchURL, function( data1 ) {
+      console.log(data1)
+      var placeID = data1.candidates[0].place_id;
+      
+      var placesDetailsURL = corsRedirectURL + "https://maps.googleapis.com/maps/api/place/details/json?placeid=" + placeID + "&fields=name,geometry/location,formatted_address,url,formatted_phone_number,opening_hours,formatted_phone_number&key=" + placeSearchKey;
+      
+      console.log("getting details with: " +  placesDetailsURL);
+      $.getJSON( placesDetailsURL, function(data2) {
+        console.log(data2);
+        
+        
+        var name = data2.result.name
+        var address = data2.result.formatted_address;
+        var number = data2.result.formatted_phone_number;
+        var url_link = data2.result.url;
+        var latitude = data2.result.geometry.location.lat;
+        var longitude = data2.result.geometry.location.lng;
+        console.log(latitude + " : " + longitude);
+        
+        var open_now = data2.result.opening_hours.open_now;
+        if (open_now == true) { 
+          open_now = "Open" 
+        } else { 
+          open_now = "Closed" 
+        }
+        
+        var weekday_text = data2.result.opening_hours.weekday_text;
+        
+        var hours_structured_content = weekday_text.join("\n");
+        
+        var hours_html_list = "<ul style='padding-left:20px;'>";
+        for (var i=0;i<weekday_text.length; i++) {
+          hours_html_list += "<li>" + weekday_text[i] + "</li>";
+        }
+        hours_html_list += "</ul>";
+        console.log(hours_html_list);
+        
+        var mapWidth = Math.floor($('.card').width() - 15);
+        console.log(mapWidth);
+        
+        var mapHTMLembed = "<iframe width='" + mapWidth + "' height='270' frameborder='0' style='border:0;'src='https://www.google.com/maps/embed/v1/place?key=" + mapEmbedKey + "&q=place_id:" + placeID + "' allowfullscreen></iframe>"
+        //var mapHTMLimg = "<img src='https://maps.googleapis.com/maps/api/staticmap?markers=" + encodeURI(address) + "&zoom=14&size=100x100&key=" + mapEmbedKey + "'>";
+        
+        $("#map").html( $.parseHTML(mapHTMLembed) );
+        console.log("loaded map");
+        
+        
+        $( "#result" ).html( "<h5>" + name + "</h5><ul style='padding-left:10px;'><li><b>Address:</b> " + address + "</li><li><b>Phone:</b> " + number + "</li><li><b>Hours: " + open_now + "</b>" + hours_html_list + "</li></ul>");
+        console.log("loaded data");
+        
+        $( "#sendInfo" ).html( "<a href='#' id='sendToLE'>Send to LE</a><a href='#' id='sendToCAO'>Send to CAO</a>" );
+        $( "#sendToLE" ).click(function() {
+          var notifyWhenDone = function(err) {
+            if (err) {
+                console.log(err);
+            }
+            console.log('sent to LE');
+          };
+          
+      
+          var cmdName = lpTag.agentSDK.cmdNames.write; // = "Write ChatLine"
+          var data = {text: url_link};
+      
+          lpTag.agentSDK.command(cmdName, data, notifyWhenDone);
+        });
+        $( "#sendToCAO" ).click(function() {
+          //$( $.parseHTML(mapHTMLimg) ).appendTo("#sendInfo");
+          
+          var data = {
+            "text": name,
+            "type": "vertical", 
+            "elements": [
+              {
+                "type": "map",
+                "lo": longitude,
+                "la": latitude,
+                "tooltip": "Map",
+                "click": {
+                  "actions": [
+                    {
+                      "type": "navigate",
+                      "name": "navigate",
+                      "lo": longitude,
+                      "la": latitude
+                    }  
+                  ]  
+                }
+              },
+              {
+                "type": "text",
+                "text": name,
+                "tooltip": "Location name",
+                "style": {
+                  "bold": true,
+                  "size": "medium"
+                },
+              },
+              {
+                "type": "text",
+                "text": hours_structured_content,
+                "tooltip": "Hours",
+                "style": {
+                  "bold": false,
+                  "size": "small"
+                },
+              },
+              {
+                "type": "text",
+                "text": address
+              },
+              {
+                "type": "button",
+                "title": "Open in Default Map",
+                "tooltip": "Open in Default Map",
+                "click": {
+                  "actions": [
+                    {
+                      "type": "navigate",
+                      "name": "navigate",
+                      "lo": longitude,
+                      "la": latitude
+                    }  
+                  ]  
+                }
+              },
+              {
+                "type": "button",
+                "title": "Open in Google Maps",
+                "tooltip": "Open in Google Maps",
+                "click": {
+                  "actions": [
+                    {
+                      "type": "link",
+                      "name": "Open in Google Maps",
+                      "uri": url_link
+                    }  
+                  ]  
+                }
+              }
+            ],
+            "metadata": { "fallback": url_link }
+          };
+      
+          cao.agentWidgetSDK.queueStructuredContent(data);
+          console.log("sent to CAO");
+        });
+      });  
+    });
+    event.preventDefault();
+  });
+}
+
+</script>
+<script type="text/javascript" src="materialize.min.js"></script>
+</body>
+</html>
